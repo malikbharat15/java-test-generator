@@ -1,0 +1,70 @@
+server:
+  port: 8080
+  servlet:
+    context-path: /data-pipeline
+
+spring:
+  application:
+    name: data-pipeline-batch
+  
+  datasource:
+    url: jdbc:postgresql://localhost:5432/pipeline_db
+    username: pipeline_user
+    password: ${DB_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      connection-timeout: 30000
+  
+  batch:
+    job:
+      enabled: false  # Disable auto-run on startup
+    jdbc:
+      initialize-schema: always
+  
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+
+# Batch configuration
+batch:
+  input:
+    customer-file: /data/input/customers.csv
+    transaction-file: /data/input/transactions.csv
+  output:
+    report-dir: /data/output/reports
+  chunk-size: 100
+  transaction:
+    max-amount: 1000000
+    min-amount: 0.01
+
+# Security configuration
+security:
+  jwt:
+    secret: ${JWT_SECRET:defaultSecretKeyForDevelopmentOnly}
+    expiration: 3600000
+
+# Actuator endpoints
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,batch,prometheus
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: when_authorized
+    batch:
+      enabled: true
+  health:
+    db:
+      enabled: true
+
+# Logging
+logging:
+  level:
+    com.data.pipeline: INFO
+    org.springframework.batch: INFO
+    org.springframework.scheduling: INFO

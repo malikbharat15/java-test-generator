@@ -1,0 +1,11 @@
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: inventory-reactive
+spec:
+  host: inventory-reactive-dev.apps.dev.example.com
+  port:
+    targetPort: 8080
+  to:
+    kind: Service
+    name: inventory-reactive

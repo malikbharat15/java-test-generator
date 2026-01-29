@@ -2,7 +2,7 @@
 Comprehensive End-to-End Test: Phase 1 + Phase 2
 
 Tests complete pipeline on realistic enterprise Java applications:
-1. Phase 1: AST Entry Point Discovery
+1. Phase 1: AST Entry Point Discovery + Schema Extraction
 2. Phase 2: Configuration Analysis (all 4 analyzers)
 3. Combined output validation
 """
@@ -16,6 +16,7 @@ from datetime import datetime
 sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
 from ast_parser.java_ast_parser import JavaASTParser
+from ast_parser.model_schema_extractor import ModelSchemaExtractor
 from config_analyzer.application_config_parser import ApplicationConfigParser
 from config_analyzer.build_config_parser import BuildConfigParser
 from config_analyzer.deployment_config_parser import DeploymentConfigParser
@@ -38,6 +39,13 @@ def run_complete_analysis(app_path: str, app_name: str):
     ast_parser = JavaASTParser(app_path)
     entry_points = ast_parser.parse_repository()
     
+    # Extract schemas for request body types
+    print(f"\n📋 Extracting request body schemas...")
+    schema_extractor = ModelSchemaExtractor(Path(app_path))
+    entry_points_dicts = [vars(ep) for ep in entry_points]
+    request_body_schemas = schema_extractor.extract_schemas_for_endpoints(entry_points_dicts)
+    print(f"   Found {len(request_body_schemas)} request body schemas")
+    
     print(f"\n✅ Phase 1 Complete:")
     print(f"   Total Entry Points: {len(entry_points)}")
     print(f"   REST Endpoints: {len([ep for ep in entry_points if ep.type == 'REST'])}")
@@ -45,6 +53,7 @@ def run_complete_analysis(app_path: str, app_name: str):
     print(f"   Scheduled Tasks: {len([ep for ep in entry_points if ep.type == 'SCHEDULED_TASK'])}")
     print(f"   Batch Jobs: {len([ep for ep in entry_points if ep.type == 'BATCH_JOB'])}")
     print(f"   CLI Commands: {len([ep for ep in entry_points if ep.type == 'CLI'])}")
+    print(f"   Request Body Schemas: {len(request_body_schemas)}")
     
     # ===== PHASE 2: Configuration Analysis =====
     print(f"\n{'─'*100}")
@@ -87,13 +96,15 @@ def run_complete_analysis(app_path: str, app_name: str):
                 'CLI': [vars(ep) for ep in entry_points if ep.type == 'CLI'],
                 'MAIN_APPLICATION': [vars(ep) for ep in entry_points if ep.type == 'MAIN_APPLICATION']
             },
+            'request_body_schemas': request_body_schemas,
             'summary': {
                 'rest_count': len([ep for ep in entry_points if ep.type == 'REST']),
                 'message_consumer_count': len([ep for ep in entry_points if ep.type == 'MESSAGE_CONSUMER']),
                 'scheduled_task_count': len([ep for ep in entry_points if ep.type == 'SCHEDULED_TASK']),
                 'batch_job_count': len([ep for ep in entry_points if ep.type == 'BATCH_JOB']),
                 'cli_count': len([ep for ep in entry_points if ep.type == 'CLI']),
-                'main_app_count': len([ep for ep in entry_points if ep.type == 'MAIN_APPLICATION'])
+                'main_app_count': len([ep for ep in entry_points if ep.type == 'MAIN_APPLICATION']),
+                'request_body_schema_count': len(request_body_schemas)
             }
         },
         'phase_2_configuration': {
@@ -158,7 +169,10 @@ def main():
     # All available applications
     all_applications = [
         ("core-banking-api", "Core Banking API - Spring Boot REST + JPA"),
-        ("ecommerce-order-service", "E-Commerce Order Service - REST + Kafka + Scheduled")
+        ("ecommerce-order-service", "E-Commerce Order Service - REST + Kafka + Scheduled"),
+        ("payment-gateway-secured", "Payment Gateway - Spring Security + JWT + Role-based Access"),
+        ("inventory-reactive-service", "Inventory Service - Spring WebFlux Reactive"),
+        ("data-pipeline-batch", "Data Pipeline - Spring Batch + Scheduled Jobs")
     ]
     
     # Filter applications if specific ones requested

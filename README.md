@@ -2,91 +2,186 @@
 
 Python-based tool that automatically generates smoke tests for Java enterprise applications using AST parsing and LLM-powered analysis.
 
-## Project Structure
+## 🚀 How It Works (End-to-End Pipeline)
+
+```
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│   Java Repo     │────▶│   Phase 1:      │────▶│   Phase 2:      │────▶│   Phase 3:      │
+│   (Any Type)    │     │   AST Parsing   │     │   Config Parse  │     │   LLM Prompt    │
+└─────────────────┘     └─────────────────┘     └─────────────────┘     └─────────────────┘
+                               │                       │                       │
+                               ▼                       ▼                       ▼
+                        • REST endpoints        • application.yml       • Newman/Postman
+                        • Kafka consumers       • pom.xml/build.gradle   collection JSON
+                        • Scheduled tasks       • OCP/K8s configs       • Environment file
+                        • Request schemas       • Existing tests        • CI/CD workflow
+```
+
+### Phase 1: AST Entry Point Discovery
+- **Java AST Parsing** using `javalang` library
+- Detects: REST endpoints, Kafka consumers, Scheduled tasks, Batch jobs, CLI commands
+- Extracts: HTTP methods, paths, parameters, security annotations, request body schemas
+- Output: `complete_analysis_{app}.json`
+
+### Phase 2: Configuration Analysis
+- **Application Config**: `application.yml`, `application.properties` (ports, context paths, DB URLs)
+- **Build Config**: `pom.xml`, `build.gradle` (Java version, Spring Boot version, dependencies)
+- **Deployment Config**: OpenShift/Kubernetes manifests (routes, replicas, health endpoints)
+- **Existing Tests**: Detects existing smoke/integration tests to avoid duplication
+
+### Phase 3: LLM Prompt Generation
+- Selects appropriate prompt template (REST, Kafka, Batch, etc.)
+- Injects application-specific data (endpoints, schemas, routes)
+- Generates structured prompt ready for LLM consumption
+- Output: `generated_prompt_{app}.txt`
+
+## 📁 Project Structure
 
 ```
 smoketest-generator/
 ├── src/
-│   ├── ast_parser/          # Java AST parsing
-│   ├── entry_point_discovery/  # Find REST/CLI/Batch entry points
-│   ├── test_generator/      # LLM-powered test generation
-│   └── cli/                 # Command-line interface
-├── examples/                # Sample Java applications
-│   ├── spring-boot-rest/    # Spring Boot REST API
-│   ├── jaxrs-service/       # JAX-RS REST service
-│   ├── spring-batch/        # Spring Batch jobs
-│   ├── kafka-consumer/      # Kafka message consumers
-│   └── cli-tool/            # Command-line tools
-├── tests/                   # Python tests
-└── output/                  # Generated smoke tests
+│   ├── ast_parser/              # Java AST parsing
+│   │   ├── java_ast_parser.py   # Entry point discovery
+│   │   └── model_schema_extractor.py  # DTO/Request body schemas
+│   ├── config_analyzer/         # Configuration parsing
+│   │   ├── application_config_parser.py
+│   │   ├── build_config_parser.py
+│   │   ├── deployment_config_parser.py
+│   │   └── existing_test_detector.py
+│   └── test_generator/          # LLM prompt building
+│       ├── prompt_builder.py    # Dynamic prompt composition
+│       └── prompts/             # Specialized prompt templates
+├── examples-enterprise/         # Sample enterprise Java apps
+│   ├── core-banking-api/        # Spring Boot REST + JPA
+│   ├── ecommerce-order-service/ # REST + Kafka + Scheduled
+│   ├── payment-gateway-secured/ # Spring Security + JWT
+│   ├── inventory-reactive-service/  # Spring WebFlux
+│   └── data-pipeline-batch/     # Spring Batch + Scheduled
+├── tests/                       # Python tests
+│   ├── test_ast_parser.py
+│   ├── test_config_analyzers.py
+│   ├── test_prompt_generation.py
+│   └── test_end_to_end.py       # Full pipeline test
+└── output/                      # Generated analysis & prompts
 ```
 
-## Setup
+## 🛠️ Setup
 
-### 1. Install Dependencies
+### 1. Create Virtual Environment
+
+```bash
+python -m venv .venv
+source .venv/bin/activate  # macOS/Linux
+```
+
+### 2. Install Dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 2. Test AST Parser
-
-Run the AST parser on all example Java applications:
+### 3. Run End-to-End Pipeline
 
 ```bash
+# Run on all example apps
+python tests/test_end_to_end.py
+
+# Run on specific apps
+python tests/test_end_to_end.py payment-gateway-secured data-pipeline-batch
+```
+
+### 4. Generate LLM Prompts
+
+```bash
+python tests/test_prompt_generation.py
+```
+
+## 📊 Example Output
+
+Running on `payment-gateway-secured`:
+
+```
+📍 PHASE 1: AST ENTRY POINT DISCOVERY
+   Total Entry Points: 17
+   REST Endpoints: 16
+   Scheduled Tasks: 0
+   Request Body Schemas: 6
+
+⚙️  PHASE 2: CONFIGURATION ANALYSIS
+   Server: localhost:8443/payment-api
+   Spring Boot: 2.7.14
+   Platform: OPENSHIFT
+   Routes: https://payment-gateway-dev.apps.dev.example.com
+
+📄 PHASE 3: PROMPT GENERATION
+   Detected Types: ['REST_API', 'CLI']
+   Primary Type: REST_API
+   Prompt Length: 18,947 chars, 570 lines
+```
+
+### Sample Generated Prompt Content:
+
+```
+--- Endpoint 10: POST /api/v1/payments ---
+Method Name: processPayment
+Return Type: ResponseEntity<PaymentResponse>
+Security: PROTECTED
+  - Auth Type: PreAuthorize
+  - Expression: hasAnyRole('USER', 'MERCHANT')
+Parameters:
+  - [body] request: PaymentRequest (REQUIRED)
+    Request Body Schema (PaymentRequest):
+      - cardNumber: String (optional)
+      - amount: BigDecimal (optional)
+      - currency: String (optional)
+```
+
+## ✅ Features
+
+| Feature | Status | Description |
+|---------|--------|-------------|
+| REST Endpoint Discovery | ✅ | Spring MVC, JAX-RS annotations |
+| Kafka Consumer Detection | ✅ | @KafkaListener, @JmsListener |
+| Scheduled Task Detection | ✅ | @Scheduled with cron expressions |
+| Security Annotation Parsing | ✅ | @PreAuthorize, @Secured, @RolesAllowed |
+| Request Body Schema Extraction | ✅ | DTOs with validation annotations |
+| Multi-Type App Support | ✅ | REST + Scheduled + Kafka in same app |
+| Reactive Detection | ✅ | Mono<>/Flux<> return types |
+| OpenShift/K8s Route Parsing | ✅ | Routes per environment |
+| Existing Test Detection | ✅ | Avoid duplicate coverage |
+| LLM Prompt Generation | ✅ | Newman/Postman collection format |
+
+## 🧪 Test Coverage
+
+```bash
+# Test AST parser
 python tests/test_ast_parser.py
+
+# Test config analyzers
+python tests/test_config_analyzers.py
+
+# Test prompt generation
+python tests/test_prompt_generation.py
+
+# Full E2E pipeline
+python tests/test_end_to_end.py
 ```
 
-This will:
-- Parse all example Java applications
-- Identify entry points (REST endpoints, CLI commands, batch jobs, etc.)
-- Generate detailed reports
-- Save analysis results to `all_examples_analysis.json`
+## 📈 Supported Application Types
 
-### 3. Test Individual Examples
+| Type | Detection Method | Prompt Template |
+|------|------------------|-----------------|
+| REST API | @RestController, @GetMapping, etc. | Newman/Postman |
+| Kafka Consumer | @KafkaListener | Kafka test guidance |
+| Scheduled Jobs | @Scheduled | Actuator verification |
+| Spring Batch | @EnableBatchProcessing | Job launcher tests |
+| WebFlux Reactive | Mono<>/Flux<> returns | Reactive test patterns |
+| CLI Tools | main() methods | CLI execution tests |
 
-```bash
-python src/ast_parser/java_ast_parser.py examples/spring-boot-rest/
-```
+## 🔜 Next Steps
 
-## Example Java Applications
-
-The project includes 5 different types of enterprise Java applications:
-
-1. **spring-boot-rest/** - Spring Boot REST API
-   - UserController: CRUD operations for users
-   - OrderController: Order management endpoints
-   - Application: Main Spring Boot entry point
-
-2. **jaxrs-service/** - JAX-RS REST Service
-   - ProductResource: Product management API
-   - HealthResource: Health check endpoint
-
-3. **spring-batch/** - Spring Batch Jobs
-   - DataProcessingJob: Batch job configuration
-   - ScheduledTasks: @Scheduled tasks
-
-4. **kafka-consumer/** - Message Consumers
-   - OrderEventConsumer: Kafka listeners
-   - NotificationListener: JMS listeners
-
-5. **cli-tool/** - Command-Line Tools
-   - DataTool: PicoCLI-based CLI tool
-   - SimpleCLI: Basic main method CLI
-
-## Current Status
-
-- [x] Project structure created
-- [x] Sample Java applications created (5 types)
-- [x] AST parser implemented
-- [ ] Entry point discovery tested
-- [ ] LLM integration
-- [ ] Test generation
-
-## Next Steps
-
-1. Test AST parser on examples
-2. Validate entry point discovery accuracy
-3. Implement LLM-powered test generation
-4. Add repository cloning capability
-5. Build CLI interface
+- [ ] LLM integration (Anthropic Claude)
+- [ ] Actual test file generation
+- [ ] CLI interface for running on any repo
+- [ ] GitHub Actions workflow generation
+- [ ] Test execution and reporting

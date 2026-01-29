@@ -1,0 +1,18 @@
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: data-pipeline-batch
+  namespace: data-pipeline-dev
+  labels:
+    app: data-pipeline-batch
+spec:
+  host: data-pipeline-dev.apps.dev.example.com
+  path: /data-pipeline
+  to:
+    kind: Service
+    name: data-pipeline-batch
+  port:
+    targetPort: 8080
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect

@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: data-pipeline-batch-config
+  namespace: data-pipeline-dev
+data:
+  SPRING_PROFILES_ACTIVE: dev
+  BATCH_CHUNK_SIZE: "100"
+  BATCH_INPUT_CUSTOMER_FILE: /data/input/customers.csv
+  BATCH_INPUT_TRANSACTION_FILE: /data/input/transactions.csv
+  BATCH_OUTPUT_REPORT_DIR: /data/output/reports
+  DB_HOST: postgresql-dev.database.svc.cluster.local
+  DB_PORT: "5432"
+  DB_NAME: pipeline_db

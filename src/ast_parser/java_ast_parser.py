@@ -144,6 +144,9 @@ class JavaASTParser:
         """Extract REST endpoints from Spring controller"""
         base_path = self._extract_request_mapping(class_node)
         
+        # Check class-level security
+        class_security = self._extract_security_annotations(class_node)
+        
         for method in class_node.methods:
             method_annotations = self._get_annotations(method)
             
@@ -157,6 +160,17 @@ class JavaASTParser:
                     path = self._extract_method_path(method, method_annotations)
                     full_path = f"{base_path}{path}".replace('//', '/')
                     
+                    # Ensure path starts with /
+                    if full_path and not full_path.startswith('/'):
+                        full_path = '/' + full_path
+                    
+                    # Extract method-level security (overrides class-level)
+                    method_security = self._extract_security_annotations(method)
+                    security = method_security if method_security else class_security
+                    
+                    # Extract return type
+                    return_type = self._extract_return_type(method)
+                    
                     entry_point = EntryPoint(
                         type="REST",
                         class_name=f"{package_name}.{class_node.name}",
@@ -165,7 +179,9 @@ class JavaASTParser:
                         details={
                             "http_method": http_method,
                             "path": full_path,
-                            "parameters": self._extract_parameters(method)
+                            "parameters": self._extract_parameters(method),
+                            "return_type": return_type,
+                            "security": security
                         }
                     )
                     self.entry_points.append(entry_point)
@@ -305,10 +321,35 @@ class JavaASTParser:
         """Extract RequestMapping value from class"""
         for annotation in class_node.annotations:
             if annotation.name == 'RequestMapping':
-                if annotation.element and hasattr(annotation.element, 'values'):
-                    for value in annotation.element.values:
-                        if isinstance(value.value, javalang.tree.Literal):
-                            return value.value.value.strip('"')
+                # Handle direct literal value: @RequestMapping("/api/v1/customers")
+                if annotation.element:
+                    if isinstance(annotation.element, javalang.tree.Literal):
+                        return annotation.element.value.strip('"')
+                    
+                    # Handle array literal: @RequestMapping({"/api/v1/customers"})
+                    if isinstance(annotation.element, javalang.tree.ElementArrayValue):
+                        if annotation.element.values:
+                            first_val = annotation.element.values[0]
+                            if isinstance(first_val, javalang.tree.Literal):
+                                return first_val.value.strip('"')
+                    
+                    # Handle named parameters: @RequestMapping(value = "/api/v1/customers")
+                    if isinstance(annotation.element, list):
+                        for pair in annotation.element:
+                            if hasattr(pair, 'name') and pair.name in ['value', 'path']:
+                                if isinstance(pair.value, javalang.tree.Literal):
+                                    return pair.value.value.strip('"')
+                                elif isinstance(pair.value, javalang.tree.ElementArrayValue):
+                                    if pair.value.values:
+                                        first_val = pair.value.values[0]
+                                        if isinstance(first_val, javalang.tree.Literal):
+                                            return first_val.value.strip('"')
+                    
+                    # Handle ElementValuePair with values attribute
+                    if hasattr(annotation.element, 'values'):
+                        for value in annotation.element.values:
+                            if hasattr(value, 'value') and isinstance(value.value, javalang.tree.Literal):
+                                return value.value.value.strip('"')
         return ""
     
     def _extract_path_annotation(self, node) -> str:
@@ -345,8 +386,8 @@ class JavaASTParser:
                         return annotation.element.value.strip('"')
         return ""
     
-    def _extract_parameters(self, method) -> List[Dict[str, str]]:
-        """Extract method parameters"""
+    def _extract_parameters(self, method) -> List[Dict[str, Any]]:
+        """Extract method parameters with full details including defaults and required flags"""
         params = []
         if method.parameters:
             for param in method.parameters:
@@ -354,11 +395,127 @@ class JavaASTParser:
                     "name": param.name,
                     "type": str(param.type.name) if param.type else "Unknown"
                 }
+                
                 # Check for parameter annotations
                 if param.annotations:
                     param_info["annotations"] = [ann.name for ann in param.annotations]
+                    
+                    # Extract details from specific annotations
+                    for ann in param.annotations:
+                        if ann.name == 'RequestParam':
+                            param_info["param_type"] = "query"
+                            self._extract_request_param_details(ann, param_info)
+                        elif ann.name == 'PathVariable':
+                            param_info["param_type"] = "path"
+                            param_info["required"] = True
+                        elif ann.name == 'RequestBody':
+                            param_info["param_type"] = "body"
+                            param_info["required"] = True
+                        elif ann.name == 'RequestHeader':
+                            param_info["param_type"] = "header"
+                            self._extract_request_param_details(ann, param_info)
+                
                 params.append(param_info)
         return params
+    
+    def _extract_request_param_details(self, annotation, param_info: Dict):
+        """Extract defaultValue, required from @RequestParam or similar annotations"""
+        if annotation.element:
+            # Handle list of ElementValuePair
+            if isinstance(annotation.element, list):
+                for pair in annotation.element:
+                    if hasattr(pair, 'name') and hasattr(pair, 'value'):
+                        if pair.name == 'defaultValue':
+                            if isinstance(pair.value, javalang.tree.Literal):
+                                param_info["default_value"] = pair.value.value.strip('"')
+                        elif pair.name == 'required':
+                            if isinstance(pair.value, javalang.tree.Literal):
+                                param_info["required"] = pair.value.value == 'true'
+                            elif isinstance(pair.value, javalang.tree.MemberReference):
+                                param_info["required"] = str(pair.value.member) == 'true'
+                        elif pair.name == 'value' or pair.name == 'name':
+                            if isinstance(pair.value, javalang.tree.Literal):
+                                param_info["alias"] = pair.value.value.strip('"')
+    
+    def _extract_security_annotations(self, node) -> Optional[Dict[str, Any]]:
+        """Extract security annotations from class or method"""
+        if not hasattr(node, 'annotations') or not node.annotations:
+            return None
+        
+        security_info = {}
+        
+        for ann in node.annotations:
+            # Spring Security annotations
+            if ann.name == 'PreAuthorize':
+                security_info['type'] = 'PreAuthorize'
+                security_info['requires_auth'] = True
+                if ann.element:
+                    if isinstance(ann.element, javalang.tree.Literal):
+                        security_info['expression'] = ann.element.value.strip('"')
+                        # Parse roles from expression like "hasRole('ADMIN')"
+                        expr = security_info['expression']
+                        if 'hasRole' in expr or 'hasAuthority' in expr:
+                            import re
+                            roles = re.findall(r"'([^']+)'", expr)
+                            security_info['roles'] = roles
+            
+            elif ann.name == 'Secured':
+                security_info['type'] = 'Secured'
+                security_info['requires_auth'] = True
+                if ann.element:
+                    if isinstance(ann.element, javalang.tree.ElementArrayValue):
+                        roles = []
+                        for val in ann.element.values:
+                            if isinstance(val, javalang.tree.Literal):
+                                roles.append(val.value.strip('"'))
+                        security_info['roles'] = roles
+                    elif isinstance(ann.element, javalang.tree.Literal):
+                        security_info['roles'] = [ann.element.value.strip('"')]
+            
+            elif ann.name == 'RolesAllowed':
+                security_info['type'] = 'RolesAllowed'
+                security_info['requires_auth'] = True
+                if ann.element:
+                    if isinstance(ann.element, javalang.tree.ElementArrayValue):
+                        roles = []
+                        for val in ann.element.values:
+                            if isinstance(val, javalang.tree.Literal):
+                                roles.append(val.value.strip('"'))
+                        security_info['roles'] = roles
+                    elif isinstance(ann.element, javalang.tree.Literal):
+                        security_info['roles'] = [ann.element.value.strip('"')]
+            
+            elif ann.name == 'PermitAll':
+                security_info['type'] = 'PermitAll'
+                security_info['requires_auth'] = False
+            
+            elif ann.name == 'DenyAll':
+                security_info['type'] = 'DenyAll'
+                security_info['requires_auth'] = True
+                security_info['denied'] = True
+        
+        return security_info if security_info else None
+    
+    def _extract_return_type(self, method) -> Optional[str]:
+        """Extract return type from method"""
+        if not method.return_type:
+            return "void"
+        
+        type_name = method.return_type.name if hasattr(method.return_type, 'name') else str(method.return_type)
+        
+        # Handle generic types like ResponseEntity<Customer>
+        if hasattr(method.return_type, 'arguments') and method.return_type.arguments:
+            generic_args = []
+            for arg in method.return_type.arguments:
+                if hasattr(arg, 'type') and hasattr(arg.type, 'name'):
+                    generic_args.append(arg.type.name)
+                elif hasattr(arg, 'name'):
+                    generic_args.append(arg.name)
+            
+            if generic_args:
+                return f"{type_name}<{', '.join(generic_args)}>"
+        
+        return type_name
     
     def _extract_annotation_param(self, method, annotation_name: str, param_name: str) -> str:
         """Extract parameter value from annotation"""

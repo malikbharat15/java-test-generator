@@ -102,16 +102,20 @@ def test_rest_api_prompt_generation():
     console.print("   ✅ Contains actual endpoint: /orders", style="green")
     
     # Should contain OCP route
-    assert "order-service-dev" in complete_prompt or "baseUrl" in complete_prompt, "❌ Missing DEV route"
+    assert "order-service-dev" in complete_prompt or "Base URL (DEV)" in complete_prompt, "❌ Missing DEV route"
     console.print("   ✅ Contains deployment route reference", style="green")
     
-    # Should contain port/context path
-    assert "8081" in complete_prompt, "❌ Missing port 8081"
-    console.print("   ✅ Contains server port: 8081", style="green")
+    # Should contain BUILD CONFIGURATION section (new format)
+    assert "BUILD CONFIGURATION" in complete_prompt or "Build Tool:" in complete_prompt, "❌ Missing build configuration"
+    console.print("   ✅ Contains build configuration section", style="green")
     
     # Should mention Spring Boot version
     assert "Spring Boot" in complete_prompt or "2.7" in complete_prompt, "❌ Missing Spring Boot version"
     console.print("   ✅ Contains Spring Boot version", style="green")
+    
+    # Should contain endpoint details (new comprehensive format)
+    assert "Parameters:" in complete_prompt or "param_type" in complete_prompt, "❌ Missing parameter details"
+    console.print("   ✅ Contains parameter details", style="green")
     
     # Print prompt statistics
     console.print("\n📊 Prompt Statistics:", style="bold yellow")

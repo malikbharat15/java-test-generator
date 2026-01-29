@@ -1,0 +1,22 @@
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: payment-gateway
+spec:
+  host: payment-gateway-dev.apps.dev.example.com
+  port:
+    targetPort: 8443
+  tls:
+    termination: edge
+  to:
+    kind: Service
+    name: payment-gateway
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: payment-gateway-config
+data:
+  SPRING_PROFILES_ACTIVE: "dev"
+  JWT_ISSUER: "https://auth-dev.payment-gateway.com"
+  DATABASE_URL: "jdbc:postgresql://db-dev.example.com:5432/payment_dev"
