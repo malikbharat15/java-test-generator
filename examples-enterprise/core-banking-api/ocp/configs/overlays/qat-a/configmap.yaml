@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: core-banking-api-config
+data:
+  SPRING_PROFILES_ACTIVE: "qat"
+  DATABASE_URL: "jdbc:postgresql://db-qat.example.com:5432/corebanking_qat"
+  KAFKA_BOOTSTRAP_SERVERS: "kafka-qat.example.com:9092"
+  LOG_LEVEL: "INFO"

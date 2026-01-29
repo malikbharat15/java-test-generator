@@ -1,0 +1,7 @@
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: core-banking-api
+spec:
+  host: core-banking-api-uat.apps.uat-a.example.com
+  path: /api

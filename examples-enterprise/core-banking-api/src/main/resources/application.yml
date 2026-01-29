@@ -1,0 +1,21 @@
+server:
+  port: 8080
+  servlet:
+    context-path: /banking
+
+spring:
+  application:
+    name: core-banking-api
+  datasource:
+    url: jdbc:h2:mem:bankdb
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: 
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: true
+
+logging:
+  level:
+    com.bank: DEBUG

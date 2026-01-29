@@ -1,0 +1,17 @@
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: core-banking-api
+  labels:
+    app: core-banking-api
+spec:
+  host: core-banking-api.apps.example.com
+  path: /api
+  to:
+    kind: Service
+    name: core-banking-api
+  port:
+    targetPort: 8080
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect

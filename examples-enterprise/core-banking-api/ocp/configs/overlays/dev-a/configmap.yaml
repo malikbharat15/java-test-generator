@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: core-banking-api-config
+data:
+  SPRING_PROFILES_ACTIVE: "dev"
+  DATABASE_URL: "jdbc:postgresql://db-dev.example.com:5432/corebanking_dev"
+  KAFKA_BOOTSTRAP_SERVERS: "kafka-dev.example.com:9092"
+  LOG_LEVEL: "DEBUG"

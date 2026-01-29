@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: core-banking-api-config
+data:
+  SPRING_PROFILES_ACTIVE: "prod"
+  DATABASE_URL: "jdbc:postgresql://db-prod.example.com:5432/corebanking_prod"
+  KAFKA_BOOTSTRAP_SERVERS: "kafka-prod.example.com:9092"
+  LOG_LEVEL: "WARN"
